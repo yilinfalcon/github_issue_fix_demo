@@ -190,7 +190,7 @@ class DemoHandler(BaseHTTPRequestHandler):
         const counterElement = document.getElementById('counter');
         
         function updateCounter() {
-            count += 2;
+            count += 1;
             counterElement.textContent = count;
         }
         
