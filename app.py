@@ -117,7 +117,10 @@ class DemoHandler(BaseHTTPRequestHandler):
                 return
 
             try:
-                url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=10&addressdetails=1"
+                url = (
+                    "https://nominatim.openstreetmap.org/reverse"
+                    f"?format=json&lat={lat}&lon={lon}&zoom=10&addressdetails=1&accept-language=en"
+                )
                 req = urllib.request.Request(url, headers={"User-Agent": APP_NAME})
                 with urllib.request.urlopen(req, timeout=5) as response:
                     data = json.loads(response.read().decode("utf-8"))
