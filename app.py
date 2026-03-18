@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import urllib.request
+import urllib.parse
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from logging.handlers import RotatingFileHandler
@@ -59,6 +61,14 @@ class DemoHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _write_html(self, status: HTTPStatus, html: str) -> None:
+        body = html.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
 
@@ -67,7 +77,7 @@ class DemoHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "service": APP_NAME,
-                    "endpoints": ["/health", "/api/echo?message=hello"],
+                    "endpoints": ["/health", "/api/echo?message=hello", "/counter", "/location"],
                 },
             )
             return
@@ -94,11 +104,260 @@ class DemoHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if parsed.path == "/api/reverse-geocode":
+            params = parse_qs(parsed.query)
+            try:
+                lat = float(params.get("lat", [None])[0])
+                lon = float(params.get("lon", [None])[0])
+            except (ValueError, TypeError, IndexError):
+                self._write_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": "invalid_coordinates", "message": "lat and lon parameters required"},
+                )
+                return
+
+            try:
+                url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lon}&zoom=10&addressdetails=1"
+                req = urllib.request.Request(url, headers={"User-Agent": APP_NAME})
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                    address = data.get("address", {})
+                    
+                    location_parts = []
+                    if address.get("city"):
+                        location_parts.append(address["city"])
+                    elif address.get("town"):
+                        location_parts.append(address["town"])
+                    elif address.get("village"):
+                        location_parts.append(address["village"])
+                    
+                    if address.get("state"):
+                        location_parts.append(address["state"])
+                    if address.get("country"):
+                        location_parts.append(address["country"])
+                    
+                    location = ", ".join(location_parts) if location_parts else data.get("display_name", "未知位置")
+                    
+                    self._write_json(
+                        HTTPStatus.OK,
+                        {
+                            "lat": lat,
+                            "lon": lon,
+                            "location": location,
+                            "display_name": data.get("display_name", ""),
+                        },
+                    )
+            except Exception as e:
+                LOGGER.warning("reverse_geocode_error | lat=%s | lon=%s | error=%s", lat, lon, str(e))
+                self._write_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {"error": "geocoding_failed", "message": str(e)},
+                )
+            return
+
+        if parsed.path == "/counter":
+            html = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数字累加器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        #counter {
+            font-size: 120px;
+            font-weight: bold;
+            color: black;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="counter">0</div>
+    <script>
+        let count = 0;
+        const counterElement = document.getElementById('counter');
+        
+        function updateCounter() {
+            count += 2;
+            counterElement.textContent = count;
+        }
+        
+        setInterval(updateCounter, 1000);
+    </script>
+</body>
+</html>"""
+            self._write_html(HTTPStatus.OK, html)
+            return
+
+        if parsed.path == "/location":
+            html = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>地理位置</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            text-align: center;
+            max-width: 600px;
+        }
+        h1 {
+            font-size: 32px;
+            margin-bottom: 30px;
+            color: #333;
+        }
+        .info-item {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+        .label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .value {
+            font-size: 18px;
+            color: #333;
+            font-weight: 500;
+        }
+        .loading {
+            color: #999;
+            font-style: italic;
+        }
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>当前位置信息</h1>
+        <div class="info-item">
+            <div class="label">纬度 (Latitude)</div>
+            <div class="value" id="lat" class="loading">获取中...</div>
+        </div>
+        <div class="info-item">
+            <div class="label">经度 (Longitude)</div>
+            <div class="value" id="lon" class="loading">获取中...</div>
+        </div>
+        <div class="info-item">
+            <div class="label">区域位置</div>
+            <div class="value" id="location" class="loading">获取中...</div>
+        </div>
+        <div id="error" style="display: none;"></div>
+    </div>
+    <script>
+        const latElement = document.getElementById('lat');
+        const lonElement = document.getElementById('lon');
+        const locationElement = document.getElementById('location');
+        const errorElement = document.getElementById('error');
+
+        function showError(message) {
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+            latElement.textContent = '获取失败';
+            lonElement.textContent = '获取失败';
+            locationElement.textContent = '获取失败';
+        }
+
+        function updateLocation(lat, lon, location) {
+            latElement.textContent = lat.toFixed(6);
+            lonElement.textContent = lon.toFixed(6);
+            locationElement.textContent = location || '未知位置';
+        }
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    
+                    latElement.textContent = lat.toFixed(6);
+                    lonElement.textContent = lon.toFixed(6);
+                    locationElement.textContent = '查询中...';
+
+                    fetch(`/api/reverse-geocode?lat=${lat}&lon=${lon}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.error) {
+                                showError('获取区域位置失败: ' + data.message);
+                            } else {
+                                updateLocation(lat, lon, data.location);
+                            }
+                        })
+                        .catch(error => {
+                            showError('网络错误: ' + error.message);
+                        });
+                },
+                function(error) {
+                    let errorMsg = '获取地理位置失败: ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMsg += '用户拒绝了地理位置请求';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMsg += '位置信息不可用';
+                            break;
+                        case error.TIMEOUT:
+                            errorMsg += '请求超时';
+                            break;
+                        default:
+                            errorMsg += '未知错误';
+                            break;
+                    }
+                    showError(errorMsg);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        } else {
+            showError('您的浏览器不支持地理位置功能');
+        }
+    </script>
+</body>
+</html>"""
+            self._write_html(HTTPStatus.OK, html)
+            return
+
         self._write_json(
             HTTPStatus.OK,
             {
                 "service": APP_NAME,
-                "endpoints": ["/health", "/api/echo?message=hello"],
+                "endpoints": ["/health", "/api/echo?message=hello", "/counter", "/location"],
             },
         )
 
