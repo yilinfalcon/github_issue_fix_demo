@@ -64,10 +64,10 @@ class DemoHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/":
             self._write_json(
-                HTTPStatus.NOT_FOUND,
+                HTTPStatus.OK,
                 {
-                    "error": "not_found",
-                    "path": parsed.path,
+                    "service": APP_NAME,
+                    "endpoints": ["/health", "/api/echo?message=hello"],
                 },
             )
             return
