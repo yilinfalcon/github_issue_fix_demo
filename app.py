@@ -144,8 +144,8 @@ class DemoHandler(BaseHTTPRequestHandler):
                     self._write_json(
                         HTTPStatus.OK,
                         {
-                            "lat": lat,
-                            "lon": lon,
+                            "lat": round(lat, 3),
+                            "lon": round(lon, 3),
                             "location": location,
                             "display_name": data.get("display_name", ""),
                         },
