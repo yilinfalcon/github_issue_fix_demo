@@ -144,8 +144,8 @@ class DemoHandler(BaseHTTPRequestHandler):
                     self._write_json(
                         HTTPStatus.OK,
                         {
-                            "lat": round(lat, 3),
-                            "lon": round(lon, 3),
+                            "lat": round(lat, 6),
+                            "lon": round(lon, 6),
                             "location": location,
                             "display_name": data.get("display_name", ""),
                         },
@@ -295,8 +295,8 @@ class DemoHandler(BaseHTTPRequestHandler):
         }
 
         function updateLocation(lat, lon, location) {
-            latElement.textContent = lat.toFixed(3);
-            lonElement.textContent = lon.toFixed(3);
+            latElement.textContent = lat.toFixed(6);
+            lonElement.textContent = lon.toFixed(6);
             locationElement.textContent = location || '未知位置';
         }
 
@@ -306,8 +306,8 @@ class DemoHandler(BaseHTTPRequestHandler):
                     const lat = position.coords.latitude;
                     const lon = position.coords.longitude;
                     
-                    latElement.textContent = lat.toFixed(3);
-                    lonElement.textContent = lon.toFixed(3);
+                    latElement.textContent = lat.toFixed(6);
+                    lonElement.textContent = lon.toFixed(6);
                     locationElement.textContent = '查询中...';
 
                     fetch(`/api/reverse-geocode?lat=${lat}&lon=${lon}`)
