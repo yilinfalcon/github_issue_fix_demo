@@ -181,7 +181,7 @@ class DemoHandler(BaseHTTPRequestHandler):
         #counter {
             font-size: 120px;
             font-weight: bold;
-            color: black;
+            color: red;
             user-select: none;
         }
     </style>
